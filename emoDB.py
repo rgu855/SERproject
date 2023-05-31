@@ -12,7 +12,7 @@ class EmodbDataset(object):
     """
 
     _ext_audio = '.wav'
-    _emotions = { 'W': 1, 'L': 2, 'E': 3, 'A': 4, 'F': 5, 'T': 6, 'N': 7 } # W = anger, L = boredom, E = disgust, A = anxiety/fear, F = happiness, T = sadness, N = neutral
+    _emotions = { 'W': 0, 'L': 1, 'E': 2, 'A': 3, 'F': 4, 'T': 5, 'N': 6 } # W = anger, L = boredom, E = disgust, A = anxiety/fear, F = happiness, T = sadness, N = neutral
 
     def __init__(self, root='download'):
         """
@@ -36,7 +36,7 @@ class EmodbDataset(object):
         self.df = pd.DataFrame(data, columns=['speaker_id', 'code', 'emotion', 'version', 'file'], dtype=np.float32)
 
         # Map emotion labels to numeric values
-        self.df['emotion'] = self.df['emotion'].map(self._emotions).astype(np.float32)
+        self.df['emotion'] = self.df['emotion'].map(self._emotions).astype(np.int64)
 
     def __len__(self):
         return len(self.df)
@@ -50,7 +50,7 @@ class EmodbDataset(object):
         emotion = self.df.loc[idx, 'emotion']
         if waveform.size(0) > 1:
             waveform = waveform.mean(dim=0).unsqueeze(0)
-        print(waveform.shape)
+        #print(waveform.shape)
         sample = {
             'waveform': waveform,
             'sample_rate': sample_rate,
