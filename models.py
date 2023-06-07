@@ -70,9 +70,15 @@ class TransferModel(nn.Module):
         #print(self.hubert.config)
         self.classifier = nn.Linear(768, n_classes)
         for name, param in self.named_parameters():
-            if name.startswith("hubert.feature_extractor") or name.startswith("hubert.encoder"):
+            if name.startswith("hubert.feature_extractor"):
                 param.require_grad = False
                 #print(f"{name} is frozen")
+            elif name.startswith("hubert.encoder"):
+                if name.startswith("hubert.encoder.layers.3") or name.startswith("hubert.encoder.layers.4") or name.startswith("hubert.encoder.layers.5"):
+                    param.require_grad = True
+                else:
+                    param.require_grad = False
+                    #print(f"{name} is frozen")
     def forward(self, x):
         x = x.view(x.shape[0],-1)
         output = self.hubert(x)[0]
