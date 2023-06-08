@@ -62,23 +62,29 @@ class MLP(nn.Module):
 from transformers import HubertModel, HubertConfig
 
 class TransferModel(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self, n_classes, pretrain = 'facebook/hubert-base-ls960', hidden_layers = None, layers_frozen = None):
         super(TransferModel, self).__init__()
-        self.hubert_config = HubertConfig(num_hidden_layers = 6)
+        if hidden_layers is None:
+            self.hubert_config = HubertConfig()
+        else:
+            self.hubert_config = HubertConfig(num_hidden_layers = hidden_layers)
         #print(self.hubert_config)
-        self.hubert = HubertModel(self.hubert_config).from_pretrained("facebook/hubert-base-ls960", config = self.hubert_config)
+        self.hubert = HubertModel(self.hubert_config).from_pretrained(pretrain, config = self.hubert_config)
         #print(self.hubert.config)
         self.classifier = nn.Linear(768, n_classes)
+        self.layers_frozen = layers_frozen
+        self.hidden_layers = hidden_layers
         for name, param in self.named_parameters():
             if name.startswith("hubert.feature_extractor"):
                 param.require_grad = False
                 #print(f"{name} is frozen")
             elif name.startswith("hubert.encoder"):
-                if name.startswith("hubert.encoder.layers.3") or name.startswith("hubert.encoder.layers.4") or name.startswith("hubert.encoder.layers.5"):
-                    param.require_grad = True
-                else:
-                    param.require_grad = False
-                    #print(f"{name} is frozen")
+                if layers_frozen is not None:
+                    for layer_num in range(0, layers_frozen):
+                        layer_name = "hubert.encoder.layers." + str(layer_num) +"."
+                        if name.startswith(layer_name):
+                            param.require_grad = False
+                            #print(f"{name} is frozen")
     def forward(self, x):
         x = x.view(x.shape[0],-1)
         output = self.hubert(x)[0]
@@ -87,7 +93,40 @@ class TransferModel(nn.Module):
         output = self.classifier(output)
         return output
     
-
+    def get_hidden_states(self, x):
+        x = x.view(x.shape[0],-1)
+        output = self.hubert(x)[0]
+        #print(output)
+        output = output.mean(dim=1)
+        return output
+    
+class TransferredModel(nn.Module):
+    def __init__(self, n_classes, transfer_model, freeze_all = False):
+        super(TransferredModel, self).__init__()
+        self.transfer_model = transfer_model
+        self.classifier = nn.Linear(768, n_classes)
+        if freeze_all == True:
+            for name, param in self.named_parameters():
+                if name.startswith("transfer_model.hubert.feature_extractor") or name.startswith("transfer_model.hubert.encoder"):
+                    param.require_grad = False
+                    #print(f"{name} is frozen")
+        else:
+            for name, param in self.named_parameters():
+                if name.startswith("transfer_model.hubert.feature_extractor"):
+                    param.require_grad = False
+                    #print(f"{name} is frozen")
+                elif name.startswith("transfer_model.hubert.encoder"):
+                    if transfer_model.layers_frozen is not None:
+                        for layer_num in range(0, transfer_model.layers_frozen):
+                            layer_name = "transfer_model.hubert.encoder.layers." + str(layer_num) +"."
+                            if name.startswith(layer_name):
+                                param.require_grad = False
+                                #print(f"{name} is frozen")
+    def forward(self, x):
+        output = self.transfer_model.get_hidden_states(x)
+        output = self.classifier(output)
+        return output
+    
 class ScratchModel(nn.Module):
     def __init__(self, n_classes):
         super(ScratchModel, self).__init__()
